@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Admin Invite Code - KenyaOnABudget Safaris</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="shortcut icon" href="logo1.png" type="image/x-icon">
+    <style>
+        :root {
+            --primary-color: #e67e22;
+            --primary-dark: #d35400;
+            --text-color: #333;
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --border-color: #ddd;
+            --error-color: #e74c3c;
+            --success-color: #2ecc71;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 30px;
+            background-color: var(--primary-color);
+            color: white;
+            text-align: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .logo img {
+            width: 50px;
+            height: 50px;
+            margin-right: 10px;
+        }
+
+        .logo span {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .title {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .btn-block {
+            display: block;
+            width: 100%;
+            text-align: center;
+            justify-content: center;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .result.success {
+            background-color: #e8f8f3;
+            border: 1px solid var(--success-color);
+            color: var(--success-color);
+        }
+
+        .result.error {
+            background-color: #fdecea;
+            border: 1px solid var(--error-color);
+            color: var(--error-color);
+        }
+
+        .code-display {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .code {
+            font-size: 24px;
+            font-weight: bold;
+            font-family: monospace;
+            letter-spacing: 2px;
+        }
+
+        .copy-btn {
+            margin-top: 15px;
+            padding: 8px 15px;
+            background-color: #f5f5f5;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .steps {
+            margin-top: 30px;
+        }
+
+        .steps h3 {
+            margin-bottom: 15px;
+            color: var(--text-color);
+        }
+
+        .steps ol {
+            padding-left: 20px;
+        }
+
+        .steps li {
+            margin-bottom: 10px;
+            color: var(--text-color);
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+            font-family: monospace;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .status p {
+            margin-bottom: 5px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .log-success {
+            color: var(--success-color);
+        }
+
+        .log-error {
+            color: var(--error-color);
+        }
+
+        .log-info {
+            color: #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <img src="logo1.png" alt="KenyaOnABudget Logo">
+                <span>KenyaOnABudget</span>
+            </div>
+            <p class="title">Admin Invite Code Generator</p>
+        </div>
+        
+        <div class="content">
+            <p>This tool will find an unused admin invite code or generate a new one and save it to your Firebase database. Use this code to create an admin account.</p>
+            
+            <div class="status" id="statusLog">
+                <p class="log-info">Ready to generate admin invite code...</p>
+            </div>
+            
+            <div style="margin-top: 20px; text-align: center;">
+                <button id="generateBtn" class="btn btn-block">
+                    <i class="fas fa-key"></i> Get Admin Invite Code
+                </button>
+            </div>
+            
+            <div id="resultContainer" class="result">
+                <!-- Result will be displayed here -->
+            </div>
+            
+            
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyAkT263nxI1qdMvgcZqS2M37-C4OwYL2I0",
+          authDomain: "kenya-on-a-budget-safaris.firebaseapp.com",
+          projectId: "kenya-on-a-budget-safaris",
+          storageBucket: "kenya-on-a-budget-safaris.firebasestorage.app",
+          messagingSenderId: "857055399633",
+          appId: "1:857055399633:web:8531f564a3ffc3d0f1bff0"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const statusLog = document.getElementById('statusLog');
+        
+        // Log function
+        function log(message, type = 'info') {
+            const entry = document.createElement('p');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = message;
+            statusLog.appendChild(entry);
+            statusLog.scrollTop = statusLog.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        // Generate random invite code
+        function generateInviteCode() {
+            const prefix = 'ADMIN';
+            const randomDigits = Math.floor(1000 + Math.random() * 9000);
+            return prefix + randomDigits;
+        }
+        
+        // Copy to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    log('Code copied to clipboard', 'success');
+                })
+                .catch(err => {
+                    log('Failed to copy code: ' + err, 'error');
+                });
+        }
+        
+        // Get or generate admin invite code
+        async function getOrGenerateAdminCode() {
+            const generateBtn = document.getElementById('generateBtn');
+            const resultContainer = document.getElementById('resultContainer');
+            
+            // Disable button and show loading
+            generateBtn.disabled = true;
+            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            
+            try {
+                log('Checking for existing unused invite codes...');
+                
+                // Check if unused invite codes exist
+                const snapshot = await db.collection('inviteCodes')
+                    .where('isUsed', '==', false)
+                    .where('role', '==', 'admin')
+                    .limit(1)
+                    .get();
+                
+                if (!snapshot.empty) {
+                    const unusedCode = snapshot.docs[0].id;
+                    log(`Found existing unused invite code: ${unusedCode}`, 'success');
+                    
+                    resultContainer.className = 'result success';
+                    resultContainer.innerHTML = `
+                        <h3><i class="fas fa-check-circle"></i> Unused Invite Code Found</h3>
+                        <p>An unused admin invite code is available.</p>
+                        <div class="code-display">
+                            <div class="code">${unusedCode}</div>
+                            <button class="copy-btn" onclick="copyToClipboard('${unusedCode}')">
+                                <i class="fas fa-copy"></i> Copy Code
+                            </button>
+                        </div>
+                    `;
+                    resultContainer.style.display = 'block';
+                    
+                    // Re-enable button
+                    generateBtn.disabled = false;
+                    generateBtn.innerHTML = '<i class="fas fa-key"></i> Get Admin Invite Code';
+                    
+                    return;
+                }
+                
+                log('No unused invite codes found, generating new code...');
+                
+                // Generate admin code
+                const inviteCode = generateInviteCode();
+                
+                // Set expiry to 1 year from now
+                const expiryDate = new Date();
+                expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+                
+                log(`Generated new code: ${inviteCode}`, 'info');
+                log('Saving to Firestore database...', 'info');
+                
+                // Save to Firestore
+                await db.collection('inviteCodes').doc(inviteCode).set({
+                    code: inviteCode,
+                    role: 'admin',
+                    permissions: ['read', 'write', 'manage-guides', 'manage-bookings'],
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    expiryDate: firebase.firestore.Timestamp.fromDate(expiryDate),
+                    createdBy: 'system',
+                    isUsed: false,
+                    isInitialCode: true
+                });
+                
+                log('New admin invite code saved successfully!', 'success');
+                
+                // Verify code was saved
+                const verifyDoc = await db.collection('inviteCodes').doc(inviteCode).get();
+                
+                if (verifyDoc.exists) {
+                    log('Verified code exists in database', 'success');
+                    
+                    // Show success message and code
+                    resultContainer.className = 'result success';
+                    resultContainer.innerHTML = `
+                        <h3><i class="fas fa-check-circle"></i> New Admin Invite Code Generated!</h3>
+                        <p>Successfully created and saved a new admin invite code to your database.</p>
+                        <div class="code-display">
+                            <div class="code">${inviteCode}</div>
+                            <button class="copy-btn" onclick="copyToClipboard('${inviteCode}')">
+                                <i class="fas fa-copy"></i> Copy Code
+                            </button>
+                        </div>
+                    `;
+                    resultContainer.style.display = 'block';
+                } else {
+                    throw new Error('Failed to verify code in database');
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                
+                resultContainer.className = 'result error';
+                resultContainer.innerHTML = `
+                    <h3><i class="fas fa-exclamation-circle"></i> Error</h3>
+                    <p>Failed to retrieve or generate admin invite code.</p>
+                    <p>Error: ${error.message}</p>
+                    <p>Please check the console for more details.</p>
+                `;
+                resultContainer.style.display = 'block';
+            } finally {
+                // Re-enable button
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = '<i class="fas fa-key"></i> Get Admin Invite Code';
+            }
+        }
+        
+        // Set up button click event
+        document.getElementById('generateBtn').addEventListener('click', getOrGenerateAdminCode);
+        
+        // Expose copy function globally
+        window.copyToClipboard = copyToClipboard;
+    </script>
+</body>
+</html>
