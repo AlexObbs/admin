@@ -1,0 +1,1306 @@
+// ADMIN DASHBOARD DEBUG AND FIX
+// This script will diagnose and fix issues with data display in the admin dashboard
+
+// ===== DATABASE CONNECTION VERIFICATION =====
+console.log("🔍 ADMIN DASHBOARD DIAGNOSTICS STARTING");
+console.log("Checking Firebase connection...");
+
+// Store original console methods
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+// Override console methods to add prefixes for better debugging
+console.log = function(...args) {
+    originalConsoleLog.apply(console, ["[ADMIN]", ...args]);
+};
+console.error = function(...args) {
+    originalConsoleError.apply(console, ["[ADMIN ERROR]", ...args]);
+};
+
+// Import all required Firebase modules directly to ensure they're loaded
+import { 
+    initializeApp, getApp 
+} from "https://www.gstatic.com/firebasejs/10.1.0/firebase-app.js";
+
+import { 
+    getAuth, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.1.0/firebase-auth.js";
+
+import { 
+    getFirestore, 
+    collection, 
+    getDocs,
+    doc,
+    getDoc,
+    query,
+    where,
+    orderBy,
+    limit
+} from "https://www.gstatic.com/firebasejs/10.1.0/firebase-firestore.js";
+
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyAkT263nxI1qdMvgcZqS2M37-C4OwYL2I0",
+    authDomain: "kenya-on-a-budget-safaris.firebaseapp.com",
+    projectId: "kenya-on-a-budget-safaris",
+    storageBucket: "kenya-on-a-budget-safaris.firebasestorage.app",
+    messagingSenderId: "857055399633",
+    appId: "1:857055399633:web:8531f564a3ffc3d0f1bff0"
+  };
+
+// Initialize Firebase or get existing app
+let app, auth, db;
+try {
+    app = getApp();
+    console.log("Firebase app already initialized");
+} catch (e) {
+    app = initializeApp(firebaseConfig);
+    console.log("Firebase app initialized");
+}
+
+auth = getAuth(app);
+db = getFirestore(app);
+
+// ===== DOM ELEMENT VERIFICATION =====
+console.log("Checking DOM elements...");
+
+// Check admin dashboard key elements
+const elementsToCheck = [
+    "supportMessagesList", 
+    "pendingBookingsList", 
+    "guidesList",
+    "messageDetailPlaceholder",
+    "messageDetailContent",
+    "messageThread"
+];
+
+const elementStatus = {};
+elementsToCheck.forEach(id => {
+    const element = document.getElementById(id);
+    elementStatus[id] = !!element;
+    console.log(`Element '${id}': ${element ? 'Found ✓' : 'MISSING ✗'}`);
+});
+
+// Function to check if section exists and create it if missing
+function ensureSectionExists(sectionId, title, description) {
+    let section = document.getElementById(sectionId);
+    if (!section) {
+        console.log(`Creating missing section: ${sectionId}`);
+        
+        // Create section
+        section = document.createElement('section');
+        section.id = sectionId;
+        section.className = 'content-section';
+        
+        // Create header
+        const header = document.createElement('div');
+        header.className = 'section-header';
+        header.innerHTML = `
+            <h2>${title}</h2>
+            <p class="section-description">${description}</p>
+        `;
+        
+        section.appendChild(header);
+        
+        // Add to content wrapper
+        const contentWrapper = document.querySelector('.content-wrapper');
+        if (contentWrapper) {
+            contentWrapper.appendChild(section);
+            console.log(`Added ${sectionId} to content wrapper`);
+        } else {
+            console.error("Content wrapper not found!");
+            
+            // Last resort: add to main-content
+            const mainContent = document.querySelector('.main-content');
+            if (mainContent) {
+                mainContent.appendChild(section);
+                console.log(`Added ${sectionId} to main-content (fallback)`);
+            } else {
+                console.error("Main content area not found, cannot add section!");
+            }
+        }
+    }
+    
+    return section;
+}
+
+// ===== DATABASE ACCESS VERIFICATION =====
+console.log("Testing database access...");
+
+// Function to test collection access
+async function testCollectionAccess(collectionName) {
+    console.log(`Testing access to '${collectionName}' collection...`);
+    try {
+        const collRef = collection(db, collectionName);
+        const snapshot = await getDocs(query(collRef, limit(1)));
+        
+        console.log(`${collectionName} collection access: ${snapshot.empty ? 'Empty (but accessible) ✓' : 'Contains data ✓'}`);
+        
+        if (!snapshot.empty) {
+            const doc = snapshot.docs[0];
+            console.log(`Sample ${collectionName} document:`, {
+                id: doc.id,
+                exists: doc.exists(),
+                data: doc.data()
+            });
+        }
+        
+        return {
+            success: true,
+            empty: snapshot.empty,
+            count: snapshot.size
+        };
+    } catch (error) {
+        console.error(`Failed to access ${collectionName} collection:`, error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// ===== ADMIN DASHBOARD FIX IMPLEMENTATION =====
+
+// Unified function to display section content
+async function displaySectionContent(section) {
+    console.log(`Displaying content for section: ${section}`);
+    
+    switch(section) {
+        case 'support-messages':
+            await displaySupportMessages();
+            break;
+        case 'guide-assignment':
+            await displayPendingBookings();
+            break;
+        case 'guides':
+            await displayAllGuides();
+            break;
+        default:
+            console.log(`No specific display handler for section: ${section}`);
+    }
+}
+
+// Function to display support messages
+async function displaySupportMessages() {
+    console.log("Displaying support messages...");
+    
+    // Ensure the messages section exists
+    const messagesSection = ensureSectionExists(
+        'support-messages-section', 
+        'Support Messages', 
+        'Manage and respond to customer support messages'
+    );
+    
+    // Create message list container if it doesn't exist
+    let messagesList = document.getElementById('supportMessagesList');
+    if (!messagesList) {
+        console.log("Creating missing supportMessagesList element");
+        
+        // Create messages container structure if missing
+        const messagesContainer = document.createElement('div');
+        messagesContainer.className = 'messages-container';
+        messagesContainer.innerHTML = `
+            <div class="messages-list-container">
+                <div class="messages-list-header">
+                    <h3>Conversations</h3>
+                    <div class="message-filters">
+                        <select id="messageStatusFilter">
+                            <option value="all">All Messages</option>
+                            <option value="unread">Unread</option>
+                            <option value="read">Read</option>
+                        </select>
+                        <div class="search-box">
+                            <input type="text" id="messageSearchInput" placeholder="Search messages...">
+                            <i class="fas fa-search"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="messages-list" id="supportMessagesList">
+                    <div class="loading-container">
+                        <div class="spinner"></div>
+                        <p>Loading messages...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="message-detail-container">
+                <div class="message-detail-placeholder" id="messageDetailPlaceholder">
+                    <div class="placeholder-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <h3>Select a conversation</h3>
+                    <p>Choose a conversation from the list to view messages and respond</p>
+                </div>
+                
+                <div class="message-detail" id="messageDetailContent" style="display: none;">
+                    <div class="message-detail-header">
+                        <div class="message-sender-info">
+                            <div class="sender-avatar">
+                                <span id="senderInitials">JD</span>
+                            </div>
+                            <div class="sender-details">
+                                <h3 id="senderName">John Doe</h3>
+                                <p id="messageSubject">Question about safari booking</p>
+                            </div>
+                        </div>
+                        <div class="message-actions">
+                            <button class="action-btn" id="markAsReadBtn">
+                                <i class="fas fa-envelope-open"></i>
+                                <span>Mark as Read</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="message-thread" id="messageThread">
+                        <!-- Message bubbles will be populated here -->
+                    </div>
+                    
+                    <div class="message-reply-form">
+                        <form id="supportReplyForm">
+                            <div class="form-group">
+                                <textarea id="replyContent" placeholder="Type your reply here..." required></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn-primary">
+                                    <i class="fas fa-paper-plane"></i>
+                                    Send Reply
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        messagesSection.appendChild(messagesContainer);
+        
+        // Get the newly created element
+        messagesList = document.getElementById('supportMessagesList');
+        
+        // Add event listeners to new elements
+        const messageStatusFilter = document.getElementById('messageStatusFilter');
+        const messageSearchInput = document.getElementById('messageSearchInput');
+        
+        if (messageStatusFilter) {
+            messageStatusFilter.addEventListener('change', () => {
+                displaySupportMessages();
+            });
+        }
+        
+        if (messageSearchInput) {
+            messageSearchInput.addEventListener('input', filterMessages);
+        }
+        
+        const supportReplyForm = document.getElementById('supportReplyForm');
+        if (supportReplyForm) {
+            supportReplyForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                alert('Message reply functionality will be implemented soon');
+            });
+        }
+    }
+    
+    // Test messages collection access
+    const messagesAccess = await testCollectionAccess('messages');
+    
+    if (!messagesAccess.success) {
+        messagesList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Error accessing messages collection: ${messagesAccess.error}</p>
+            </div>
+        `;
+        return;
+    }
+    
+    if (messagesAccess.empty) {
+        messagesList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-envelope-open"></i>
+                <p>No messages found in database</p>
+                <button class="action-btn" onclick="window.createSampleMessage()">
+                    <i class="fas fa-plus"></i> Create Sample Message
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    // Fetch ALL messages to debug (without restrictions)
+    try {
+        console.log("Fetching ALL messages for debugging...");
+        const messagesRef = collection(db, "messages");
+        const allMessagesSnapshot = await getDocs(messagesRef);
+        
+        console.log(`Found ${allMessagesSnapshot.size} total messages in database`);
+        
+        if (allMessagesSnapshot.empty) {
+            messagesList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-envelope-open"></i>
+                    <p>No messages found in database</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Display all messages without filtering
+        let html = '';
+        allMessagesSnapshot.forEach(doc => {
+            const message = doc.data();
+            message.id = doc.id;
+            
+            // Log message details for debugging
+            console.log(`Message ${doc.id}:`, {
+                sender: message.sender,
+                recipient: message.recipient,
+                subject: message.subject,
+                threadId: message.threadId,
+                timestamp: message.timestamp
+            });
+            
+            // Create initials for avatar
+            let initials = 'C';
+            if (message.senderName) {
+                initials = message.senderName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            }
+            
+            // Format timestamp
+            const timestamp = message.timestamp ? 
+                formatTimeAgo(new Date(message.timestamp.seconds * 1000)) : 
+                'Recently';
+            
+            // Set message preview (truncate if too long)
+            const previewText = message.content ? 
+                (message.content.length > 60 ? message.content.substring(0, 60) + '...' : message.content) : 
+                'No content';
+            
+            html += `
+                <div class="message-item ${message.read ? '' : 'unread'}" data-thread-id="${message.threadId || doc.id}" data-id="${message.id}" onclick="window.viewMessageThread('${message.threadId || doc.id}', '${doc.id}')">
+                    <div class="message-avatar">${initials}</div>
+                    <div class="message-preview">
+                        <div class="message-name">${message.senderName || message.sender || 'Unknown Sender'}</div>
+                        <div class="message-subject">${message.subject || 'No subject'}</div>
+                        <div class="message-preview-text">${previewText}</div>
+                    </div>
+                    <div class="message-meta">
+                        <div class="message-time">${timestamp}</div>
+                        ${message.read ? '' : '<div class="message-status-dot"></div>'}
+                    </div>
+                </div>
+            `;
+        });
+        
+        messagesList.innerHTML = html || '<div class="empty-state"><i class="fas fa-envelope-open"></i><p>No messages to display</p></div>';
+        
+    } catch (error) {
+        console.error('Error loading ALL messages:', error);
+        messagesList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Error loading messages: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Function to display pending bookings
+async function displayPendingBookings() {
+    console.log("Displaying pending bookings...");
+    
+    // Ensure the guide assignment section exists
+    const assignmentSection = ensureSectionExists(
+        'guide-assignment-section', 
+        'Guide Assignment', 
+        'Assign guides to pending bookings'
+    );
+    
+    // Create bookings table if it doesn't exist
+    let bookingsTable = document.getElementById('pendingBookingsTable');
+    if (!bookingsTable) {
+        console.log("Creating missing pendingBookingsTable element");
+        
+        // Create card structure for bookings
+        const bookingsCard = document.createElement('div');
+        bookingsCard.className = 'card';
+        bookingsCard.innerHTML = `
+            <div class="card-header">
+                <h3>Pending Bookings</h3>
+                <div class="header-actions">
+                    <div class="search-box">
+                        <input type="text" id="bookingSearchInput" placeholder="Search bookings...">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <select id="bookingStatusFilter">
+                        <option value="all">All Statuses</option>
+                        <option value="Pending" selected>Guide Pending</option>
+                        <option value="Assigned">Guide Assigned</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body">
+                <table class="data-table" id="pendingBookingsTable">
+                    <thead>
+                        <tr>
+                            <th>Booking ID</th>
+                            <th>Client Name</th>
+                            <th>Package</th>
+                            <th>Booking Date</th>
+                            <th>Guide Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pendingBookingsList">
+                        <tr>
+                            <td colspan="6" class="loading-row">
+                                <div class="spinner"></div>
+                                <span>Loading bookings...</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        assignmentSection.appendChild(bookingsCard);
+        
+        // Get the newly created table and add event listeners
+        bookingsTable = document.getElementById('pendingBookingsTable');
+        const bookingSearchInput = document.getElementById('bookingSearchInput');
+        const bookingStatusFilter = document.getElementById('bookingStatusFilter');
+        
+        if (bookingSearchInput) {
+            bookingSearchInput.addEventListener('input', filterBookings);
+        }
+        
+        if (bookingStatusFilter) {
+            bookingStatusFilter.addEventListener('change', () => {
+                displayPendingBookings();
+            });
+        }
+    }
+    
+    const pendingBookingsList = document.getElementById('pendingBookingsList');
+    if (!pendingBookingsList) {
+        console.error("pendingBookingsList element still not found after creation attempt!");
+        return;
+    }
+    
+    // Test bookings collection access
+    const bookingsAccess = await testCollectionAccess('bookings');
+    
+    if (!bookingsAccess.success) {
+        pendingBookingsList.innerHTML = `
+            <tr>
+                <td colspan="6" class="loading-row">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Error accessing bookings collection: ${bookingsAccess.error}</span>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    if (bookingsAccess.empty) {
+        pendingBookingsList.innerHTML = `
+            <tr>
+                <td colspan="6" class="loading-row">
+                    <i class="fas fa-info-circle"></i>
+                    <span>No bookings found in database</span>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // Fetch ALL bookings without restrictions
+    try {
+        console.log("Fetching ALL bookings for debugging...");
+        const bookingsRef = collection(db, "bookings");
+        const allBookingsSnapshot = await getDocs(bookingsRef);
+        
+        console.log(`Found ${allBookingsSnapshot.size} total bookings in database`);
+        
+        if (allBookingsSnapshot.empty) {
+            pendingBookingsList.innerHTML = `
+                <tr>
+                    <td colspan="6" class="loading-row">
+                        <i class="fas fa-info-circle"></i>
+                        <span>No bookings found in database</span>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        // Filter bookings based on status filter (if specified)
+        const statusFilter = document.getElementById('bookingStatusFilter')?.value || 'all';
+        
+        // Filter in JavaScript rather than in the query
+        const filteredDocs = statusFilter === 'all' 
+            ? allBookingsSnapshot.docs 
+            : allBookingsSnapshot.docs.filter(doc => {
+                const data = doc.data();
+                return data.guideStatus === statusFilter;
+            });
+        
+        console.log(`After filtering by '${statusFilter}': ${filteredDocs.length} bookings`);
+        
+        // If no matches after filtering
+        if (filteredDocs.length === 0) {
+            pendingBookingsList.innerHTML = `
+                <tr>
+                    <td colspan="6" class="loading-row">
+                        <i class="fas fa-info-circle"></i>
+                        <span>No bookings matching the '${statusFilter}' filter</span>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        // Build HTML
+        let html = '';
+        filteredDocs.forEach(doc => {
+            const booking = doc.data();
+            booking.id = doc.id;
+            
+            // Log booking details for debugging
+            console.log(`Booking ${doc.id}:`, {
+                clientName: booking.clientName,
+                packageName: booking.packageName,
+                packageType: booking.packageType,
+                guideStatus: booking.guideStatus
+            });
+            
+            // Format dates safely
+            let bookingDate = 'Not available';
+            
+            if (booking.bookingDate && booking.bookingDate.seconds) {
+                bookingDate = new Date(booking.bookingDate.seconds * 1000).toLocaleDateString();
+            } else if (booking.createdAt && booking.createdAt.seconds) {
+                bookingDate = new Date(booking.createdAt.seconds * 1000).toLocaleDateString();
+            } else if (booking.bookingDate) {
+                // Handle if it's a regular Date object or string
+                try {
+                    bookingDate = new Date(booking.bookingDate).toLocaleDateString();
+                } catch (e) {
+                    // Keep default
+                }
+            }
+            
+            // Determine guide status - default to 'Pending' if not specified
+            const guideStatus = booking.guideStatus || 'Pending';
+            const statusClass = guideStatus === 'Assigned' ? 'status-assigned' : 'status-pending';
+            
+            html += `
+                <tr>
+                    <td>${booking.id.substring(0, 8)}...</td>
+                    <td>${booking.clientName || 'Unknown'}</td>
+                    <td>${booking.packageName || booking.packageType || 'Unknown'}</td>
+                    <td>${bookingDate}</td>
+                    <td><span class="status-badge ${statusClass}">${guideStatus}</span></td>
+                    <td>
+                        <button class="action-btn view" onclick="window.viewBookingDetails('${booking.id}')">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        ${guideStatus !== 'Assigned' ? 
+                            `<button class="action-btn" onclick="window.openAssignmentModal('${booking.id}')">
+                                <i class="fas fa-user-plus"></i> Assign Guide
+                            </button>` : 
+                            ''}
+                    </td>
+                </tr>
+            `;
+        });
+        
+        pendingBookingsList.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading ALL bookings:', error);
+        pendingBookingsList.innerHTML = `
+            <tr>
+                <td colspan="6" class="loading-row">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Error loading bookings: ${error.message}</span>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// Function to display all guides
+async function displayAllGuides() {
+    console.log("Displaying all guides...");
+    
+    // Ensure the guides section exists
+    const guidesSection = ensureSectionExists(
+        'guides-section', 
+        'All Guides', 
+        'Manage safari guides'
+    );
+    
+    // Create guides card if it doesn't exist
+    if (!document.querySelector('#guides-section .card')) {
+        console.log("Creating missing guides card");
+        
+        // Create card structure for guides
+        const guidesCard = document.createElement('div');
+        guidesCard.className = 'card';
+        guidesCard.innerHTML = `
+            <div class="card-header">
+                <h3>Safari Guides</h3>
+                <div class="header-actions">
+                    <div class="search-box">
+                        <input type="text" id="guideSearchInput" placeholder="Search guides...">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <select id="guideStatusFilter">
+                        <option value="all">All Statuses</option>
+                        <option value="Active" selected>Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                    <button class="action-btn" id="addGuideBtn">
+                        <i class="fas fa-plus"></i> Add Guide
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="guide-grid" id="guidesList">
+                    <div class="loading-container">
+                        <div class="spinner"></div>
+                        <p>Loading guides...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        guidesSection.appendChild(guidesCard);
+        
+        // Add event listeners to new elements
+        const guideSearchInput = document.getElementById('guideSearchInput');
+        const guideStatusFilter = document.getElementById('guideStatusFilter');
+        const addGuideBtn = document.getElementById('addGuideBtn');
+        
+        if (guideSearchInput) {
+            guideSearchInput.addEventListener('input', filterGuides);
+        }
+        
+        if (guideStatusFilter) {
+            guideStatusFilter.addEventListener('change', () => {
+                displayAllGuides();
+            });
+        }
+        
+        if (addGuideBtn) {
+            addGuideBtn.addEventListener('click', () => {
+                alert('Add guide functionality will be implemented soon');
+            });
+        }
+        
+        // Add CSS for guides grid
+        const styleElement = document.createElement('style');
+        styleElement.textContent = `
+            .guide-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 20px;
+            }
+            
+            .guide-card {
+                background-color: white;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+                transition: transform 0.2s, box-shadow 0.2s;
+            }
+            
+            .guide-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+            }
+            
+            .guide-card-header {
+                position: relative;
+                padding-top: 20px;
+                display: flex;
+                justify-content: center;
+            }
+            
+            .guide-avatar {
+                width: 100px;
+                height: 100px;
+                border-radius: 50%;
+                overflow: hidden;
+                border: 4px solid #fff;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            
+            .guide-avatar img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            
+            .guide-status {
+                position: absolute;
+                top: 15px;
+                right: 15px;
+                padding: 5px 10px;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                font-weight: 500;
+            }
+            
+            .status-active {
+                background-color: #e6f7ef;
+                color: #2ecc71;
+            }
+            
+            .status-inactive {
+                background-color: #fde7e6;
+                color: #e74c3c;
+            }
+            
+            .guide-card-body {
+                padding: 20px;
+                text-align: center;
+            }
+            
+            .guide-name {
+                font-size: 1.2rem;
+                font-weight: 500;
+                color: #333;
+                margin-bottom: 5px;
+            }
+            
+            .guide-experience {
+                font-size: 0.9rem;
+                color: #777;
+                margin-bottom: 10px;
+            }
+            
+            .guide-languages {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 5px;
+            }
+            
+            .language-tag {
+                background-color: #f8f9fa;
+                padding: 3px 8px;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                color: #555;
+            }
+            
+            .guide-card-footer {
+                padding: 15px;
+                border-top: 1px solid #eee;
+                display: flex;
+                justify-content: space-between;
+            }
+            
+            .guide-action-btn {
+                background-color: #f8f9fa;
+                color: #555;
+                border: none;
+                padding: 8px 12px;
+                border-radius: 5px;
+                font-size: 0.9rem;
+                cursor: pointer;
+                transition: background-color 0.2s;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            
+            .guide-action-btn:hover {
+                background-color: #e9ecef;
+            }
+            
+            .guide-action-btn.view {
+                background-color: #e8f4fd;
+                color: #3498db;
+            }
+            
+            .guide-action-btn.view:hover {
+                background-color: #d6eaf8;
+            }
+            
+            .guide-action-btn.edit {
+                background-color: #fff5eb;
+                color: #e67e22;
+            }
+            
+            .guide-action-btn.edit:hover {
+                background-color: #fdebd0;
+            }
+        `;
+        document.head.appendChild(styleElement);
+    }
+    
+    const guidesList = document.getElementById('guidesList');
+    if (!guidesList) {
+        console.error("guidesList element not found after creation attempt!");
+        return;
+    }
+    
+    // Test guides collection access
+    const guidesAccess = await testCollectionAccess('guides');
+    
+    if (!guidesAccess.success) {
+        guidesList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Error accessing guides collection: ${guidesAccess.error}</p>
+            </div>
+        `;
+        return;
+    }
+    
+    if (guidesAccess.empty) {
+        guidesList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-users"></i>
+                <p>No guides found in database</p>
+                <button class="action-btn" onclick="window.createSampleGuide()">
+                    <i class="fas fa-plus"></i> Create Sample Guide
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    // Fetch ALL guides without restrictions
+    try {
+        console.log("Fetching ALL guides for debugging...");
+        const guidesRef = collection(db, "guides");
+        const allGuidesSnapshot = await getDocs(guidesRef);
+        
+        console.log(`Found ${allGuidesSnapshot.size} total guides in database`);
+        
+        if (allGuidesSnapshot.empty) {
+            guidesList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <p>No guides found in database</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Filter guides based on status filter (if specified)
+        const statusFilter = document.getElementById('guideStatusFilter')?.value || 'all';
+        
+        // Filter in JavaScript rather than in the query
+        const filteredDocs = statusFilter === 'all' 
+            ? allGuidesSnapshot.docs 
+            : allGuidesSnapshot.docs.filter(doc => {
+                const data = doc.data();
+                return data.status === statusFilter;
+            });
+        
+        console.log(`After filtering by '${statusFilter}': ${filteredDocs.length} guides`);
+        
+        // If no matches after filtering
+        if (filteredDocs.length === 0) {
+            guidesList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <p>No guides matching the '${statusFilter}' filter</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Build guides grid
+        let html = '';
+        filteredDocs.forEach(doc => {
+            const guide = doc.data();
+            guide.id = doc.id;
+            
+            // Log guide details for debugging
+            console.log(`Guide ${doc.id}:`, {
+                fullName: guide.fullName,
+                experienceYears: guide.experienceYears,
+                status: guide.status,
+                languages: guide.languages
+            });
+            
+            // Create guide card
+            html += `
+                <div class="guide-card" data-id="${guide.id}">
+                    <div class="guide-card-header">
+                        <div class="guide-avatar">
+                            <img src="${guide.profileImageUrl || 'profile.png'}" alt="${guide.fullName || 'Guide'}">
+                        </div>
+                        <div class="guide-status ${guide.status === 'Active' ? 'status-active' : 'status-inactive'}">
+                            ${guide.status || 'Active'}
+                        </div>
+                    </div>
+                    <div class="guide-card-body">
+                        <h3 class="guide-name">${guide.fullName || 'Guide ' + guide.id.substring(0, 5)}</h3>
+                        <p class="guide-experience">${guide.experienceYears || 0} years experience</p>
+                        <div class="guide-languages">
+                            ${guide.languages && Array.isArray(guide.languages) ? 
+                                guide.languages.map(lang => `<span class="language-tag">${lang}</span>`).join('') : 
+                                '<span class="language-tag">English</span>'}
+                        </div>
+                    </div>
+                    <div class="guide-card-footer">
+                        <button class="guide-action-btn view" onclick="window.viewGuideDetails('${guide.id}')">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button class="guide-action-btn edit" onclick="window.editGuide('${guide.id}')">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        guidesList.innerHTML = html || '<div class="empty-state"><i class="fas fa-users"></i><p>No guides to display</p></div>';
+        
+    } catch (error) {
+        console.error('Error loading ALL guides:', error);
+        guidesList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Error loading guides: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Filter bookings based on search input
+function filterBookings() {
+    const bookingSearchInput = document.getElementById('bookingSearchInput');
+    if (!bookingSearchInput) return;
+    
+    const searchText = bookingSearchInput.value.toLowerCase();
+    const rows = document.querySelectorAll('#pendingBookingsList tr');
+    
+    rows.forEach(row => {
+        if (row.querySelector('.loading-row')) return;
+        
+        const bookingId = row.cells[0].textContent.toLowerCase();
+        const clientName = row.cells[1].textContent.toLowerCase();
+        const packageName = row.cells[2].textContent.toLowerCase();
+        
+        if (
+            bookingId.includes(searchText) ||
+            clientName.includes(searchText) ||
+            packageName.includes(searchText)
+        ) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Filter guides based on search input
+function filterGuides() {
+    const guideSearchInput = document.getElementById('guideSearchInput');
+    if (!guideSearchInput) return;
+    
+    const searchText = guideSearchInput.value.toLowerCase();
+    const guideCards = document.querySelectorAll('.guide-card');
+    
+    guideCards.forEach(card => {
+        const guideName = card.querySelector('.guide-name')?.textContent.toLowerCase() || '';
+        const guideExperience = card.querySelector('.guide-experience')?.textContent.toLowerCase() || '';
+        const guideLanguages = card.querySelector('.guide-languages')?.textContent.toLowerCase() || '';
+        
+        if (
+            guideName.includes(searchText) ||
+            guideExperience.includes(searchText) ||
+            guideLanguages.includes(searchText)
+        ) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+// Filter messages based on search input
+function filterMessages() {
+    const messageSearchInput = document.getElementById('messageSearchInput');
+    if (!messageSearchInput) return;
+    
+    const searchText = messageSearchInput.value.toLowerCase();
+    const messageItems = document.querySelectorAll('.message-item');
+    
+    messageItems.forEach(item => {
+        const senderName = item.querySelector('.message-name')?.textContent.toLowerCase() || '';
+        const subject = item.querySelector('.message-subject')?.textContent.toLowerCase() || '';
+        const preview = item.querySelector('.message-preview-text')?.textContent.toLowerCase() || '';
+        
+        if (
+            senderName.includes(searchText) ||
+            subject.includes(searchText) ||
+            preview.includes(searchText)
+        ) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+// Function to load message thread
+async function viewMessageThread(threadId, messageId) {
+    console.log(`Loading message thread: ${threadId}, message: ${messageId}`);
+    
+    const messageDetailPlaceholder = document.getElementById('messageDetailPlaceholder');
+    const messageDetailContent = document.getElementById('messageDetailContent');
+    const messageThread = document.getElementById('messageThread');
+    
+    if (!messageDetailContent || !messageDetailPlaceholder || !messageThread) {
+        console.error("Message detail elements not found");
+        return;
+    }
+    
+    // Show loading
+    messageDetailPlaceholder.style.display = 'none';
+    messageDetailContent.style.display = 'block';
+    messageThread.innerHTML = `
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <p>Loading conversation...</p>
+        </div>
+    `;
+    
+    try {
+        // Get all messages in the thread
+        const messagesRef = collection(db, "messages");
+        const threadQuery = query(
+            messagesRef,
+            where("threadId", "==", threadId)
+        );
+        
+        const threadSnapshot = await getDocs(threadQuery);
+        console.log(`Found ${threadSnapshot.size} messages in thread ${threadId}`);
+        
+        if (threadSnapshot.empty) {
+            messageThread.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p>No messages found in this thread</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Sort messages by timestamp
+        const messages = threadSnapshot.docs.map(doc => {
+            return { id: doc.id, ...doc.data() };
+        }).sort((a, b) => {
+            const timeA = a.timestamp ? a.timestamp.seconds : 0;
+            const timeB = b.timestamp ? b.timestamp.seconds : 0;
+            return timeA - timeB;
+        });
+        
+        // Get the first message for header info
+        const firstMessage = messages[0];
+        console.log("First message in thread:", firstMessage);
+        
+        // Update header info
+        const senderInitials = document.getElementById('senderInitials');
+        const senderName = document.getElementById('senderName');
+        const messageSubject = document.getElementById('messageSubject');
+        
+        if (senderInitials) {
+            if (firstMessage.senderName) {
+                senderInitials.textContent = firstMessage.senderName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            } else {
+                senderInitials.textContent = 'C';
+            }
+        }
+        
+        if (senderName) senderName.textContent = firstMessage.senderName || firstMessage.sender || 'Sender';
+        if (messageSubject) messageSubject.textContent = firstMessage.subject || 'No subject';
+        
+        // Show/hide mark as read button
+        const markAsReadBtn = document.getElementById('markAsReadBtn');
+        if (markAsReadBtn) {
+            markAsReadBtn.style.display = 'none'; // Hide for now
+        }
+        
+        // Build thread HTML
+        let threadHTML = '';
+        messages.forEach(message => {
+            const isSupport = message.sender === 'support';
+            
+            // Format timestamp
+            const timestamp = message.timestamp ? 
+                new Date(message.timestamp.seconds * 1000).toLocaleString() : 
+                'Recently';
+            
+            // Get sender initials
+            let bubbleInitials;
+            if (isSupport) {
+                bubbleInitials = 'S';
+            } else if (message.senderName) {
+                bubbleInitials = message.senderName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            } else {
+                bubbleInitials = 'C';
+            }
+            
+            threadHTML += `
+                <div class="message-bubble ${isSupport ? 'support' : 'client'}">
+                    <div class="message-bubble-avatar">${bubbleInitials}</div>
+                    <div class="message-bubble-content">
+                        <div class="message-bubble-header">
+                            <div class="message-bubble-name">${isSupport ? 'Support Team' : (message.senderName || message.sender || 'Sender')}</div>
+                            <div class="message-bubble-time">${timestamp}</div>
+                        </div>
+                        <div class="message-bubble-text">${message.content || 'No content'}</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        messageThread.innerHTML = threadHTML || '<div class="empty-state"><i class="fas fa-comments"></i><p>No messages in this thread</p></div>';
+        
+        // Scroll to bottom of thread
+        messageThread.scrollTop = messageThread.scrollHeight;
+        
+    } catch (error) {
+        console.error('Error loading message thread:', error);
+        if (messageThread) {
+            messageThread.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p>Error loading conversation: ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// Format time ago
+function formatTimeAgo(date) {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) {
+        return 'Just now';
+    }
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+        return `${diffInMinutes} min${diffInMinutes > 1 ? 's' : ''} ago`;
+    }
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+        return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    }
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) {
+        return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+    }
+    
+    return date.toLocaleDateString();
+}
+
+// ===== UTILITY FUNCTIONS FOR THE WINDOW SCOPE =====
+
+// Make these functions available globally
+window.viewMessageThread = viewMessageThread;
+window.viewBookingDetails = function(bookingId) {
+    alert(`View booking details: ${bookingId}`);
+};
+window.openAssignmentModal = function(bookingId) {
+    alert(`Assign guide to booking: ${bookingId}`);
+};
+window.viewGuideDetails = function(guideId) {
+    alert(`View guide details: ${guideId}`);
+};
+window.editGuide = function(guideId) {
+    alert(`Edit guide: ${guideId}`);
+};
+window.createSampleGuide = function() {
+    alert('Create sample guide');
+};
+window.createSampleMessage = function() {
+    alert('Create sample message');
+};
+
+// ===== INITIALIZATION =====
+
+// When auth state changes, display the section content
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        console.log("User authenticated:", user.uid);
+        
+        // Add button to redisplay current section
+        const contentWrapper = document.querySelector('.content-wrapper');
+        if (contentWrapper) {
+            const debugButton = document.createElement('button');
+            debugButton.className = 'action-btn';
+            debugButton.style.position = 'fixed';
+            debugButton.style.bottom = '20px';
+            debugButton.style.right = '20px';
+            debugButton.style.zIndex = '1000';
+            debugButton.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh Section';
+            debugButton.addEventListener('click', () => {
+                // Get current active section
+                const activeSection = document.querySelector('.content-section.active');
+                if (activeSection) {
+                    const sectionId = activeSection.id.replace('-section', '');
+                    displaySectionContent(sectionId);
+                }
+            });
+            document.body.appendChild(debugButton);
+        }
+        
+        // Modify navigation to use our display functions
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const sectionId = this.getAttribute('data-section');
+                if (sectionId) {
+                    // Update active class
+                    document.querySelectorAll('.nav-item').forEach(navItem => {
+                        navItem.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    
+                    // Hide all sections
+                    document.querySelectorAll('.content-section').forEach(section => {
+                        section.classList.remove('active');
+                    });
+                    
+                    // Show selected section
+                    const targetSection = document.getElementById(`${sectionId}-section`);
+                    if (targetSection) {
+                        targetSection.classList.add('active');
+                    }
+                    
+                    // Update the displayed content
+                    displaySectionContent(sectionId);
+                }
+            });
+        });
+        
+        // Find current active section
+        const activeSection = document.querySelector('.content-section.active');
+        if (activeSection) {
+            const sectionId = activeSection.id.replace('-section', '');
+            displaySectionContent(sectionId);
+        } else {
+            // Default to dashboard
+            displaySectionContent('dashboard');
+        }
+    } else {
+        console.log("No user authenticated");
+    }
+});
+
+console.log("🔍 ADMIN DASHBOARD DIAGNOSTICS COMPLETE");

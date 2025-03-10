@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - KenyaOnABudget Safaris</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="shortcut icon" href="logo1.png" type="image/x-icon">
+    <style>
+        :root {
+            --primary-color: #e67e22;
+            --primary-dark: #d35400;
+            --primary-light: #f39c12;
+            --accent-color: #2ecc71;
+            --text-color: #333;
+            --text-light: #777;
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --border-color: #ddd;
+            --error-color: #e74c3c;
+            --success-color: #2ecc71;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            background-image: url('https://images.unsplash.com/photo-1516426122078-c23e76319801?ixlib=rb-4.0.3');
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1;
+        }
+
+        .login-container {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px;
+            overflow: hidden;
+            position: relative;
+            z-index: 2;
+        }
+
+        .login-header {
+            padding: 30px;
+            background-color: var(--primary-color);
+            color: white;
+            text-align: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .logo img {
+            width: 50px;
+            height: 50px;
+            margin-right: 10px;
+        }
+
+        .logo span {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .login-title {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .login-form {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 15px 12px 40px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-light);
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .remember-forgot {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .remember-me {
+            display: flex;
+            align-items: center;
+        }
+
+        .remember-me input {
+            margin-right: 5px;
+        }
+
+        .forgot-password {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .forgot-password:hover {
+            text-decoration: underline;
+        }
+
+        .form-actions {
+            margin-top: 30px;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .btn-login:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .auth-footer {
+            text-align: center;
+            padding: 20px 30px;
+            background-color: #f9f9f9;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .auth-footer p {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .auth-footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-footer a:hover {
+            text-decoration: underline;
+        }
+
+        .alert {
+            padding: 12px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .alert i {
+            margin-right: 10px;
+            font-size: 1.1rem;
+        }
+
+        .alert-error {
+            background-color: #fdecea;
+            color: var(--error-color);
+            border-left: 4px solid var(--error-color);
+        }
+
+        .alert-success {
+            background-color: #e8f8f3;
+            color: var(--success-color);
+            border-left: 4px solid var(--success-color);
+        }
+
+        .alert-info {
+            background-color: #e8f4fd;
+            color: #3498db;
+            border-left: 4px solid #3498db;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="logo">
+                <img src="logo1.png" alt="KenyaOnABudget Logo">
+                <span>KenyaOnABudget</span>
+            </div>
+            <p class="login-title">Admin Dashboard Login</p>
+        </div>
+        
+        <div class="login-form">
+            <div id="loginAlert" class="alert alert-error hidden">
+                <i class="fas fa-exclamation-circle"></i>
+                <span id="loginAlertMessage">Invalid email or password. Please try again.</span>
+            </div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <div class="input-group">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="email" name="email" placeholder="Enter your email" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="input-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                    </div>
+                </div>
+                
+                <div class="remember-forgot">
+                    <div class="remember-me">
+                        <input type="checkbox" id="rememberMe" name="rememberMe">
+                        <label for="rememberMe">Remember me</label>
+                    </div>
+                    <a href="#" class="forgot-password" id="forgotPasswordLink">Forgot password?</a>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-login">
+                        <i class="fas fa-sign-in-alt"></i> Log In
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="auth-footer">
+            <p>Don't have an account? <a href="admin-signup.html">Request Access</a></p>
+        </div>
+    </div>
+    
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <script>
+        // Firebase configuration - same as your dashboard
+        const firebaseConfig = {
+  apiKey: "AIzaSyAkT263nxI1qdMvgcZqS2M37-C4OwYL2I0",
+  authDomain: "kenya-on-a-budget-safaris.firebaseapp.com",
+  projectId: "kenya-on-a-budget-safaris",
+  storageBucket: "kenya-on-a-budget-safaris.firebasestorage.app",
+  messagingSenderId: "857055399633",
+  appId: "1:857055399633:web:8531f564a3ffc3d0f1bff0"
+};
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        // Login form submission
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Get form values
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const rememberMe = document.getElementById('rememberMe').checked;
+            
+            // Set persistence based on remember me checkbox
+            const persistence = rememberMe ? 
+                firebase.auth.Auth.Persistence.LOCAL : 
+                firebase.auth.Auth.Persistence.SESSION;
+            
+            // Set persistence first
+            auth.setPersistence(persistence)
+                .then(() => {
+                    // Show loading state
+                    document.querySelector('.btn-login').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+                    document.querySelector('.btn-login').disabled = true;
+                    
+                    // Sign in with email and password
+                    return auth.signInWithEmailAndPassword(email, password);
+                })
+                .then((userCredential) => {
+                    // Check if the user is an admin
+                    return db.collection('admins').doc(userCredential.user.uid).get()
+                        .then((doc) => {
+                            if (doc.exists) {
+                                // User is an admin, redirect to dashboard
+                                window.location.href = 'admin.html';
+                            } else {
+                                // User is not an admin, sign out and show error
+                                auth.signOut();
+                                showAlert('error', 'You do not have admin privileges. Please contact the administrator.');
+                                resetLoginButton();
+                            }
+                        });
+                })
+                .catch((error) => {
+                    console.error("Login error:", error);
+                    
+                    // Show appropriate error message
+                    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                        showAlert('error', 'Invalid email or password. Please try again.');
+                    } else if (error.code === 'auth/too-many-requests') {
+                        showAlert('error', 'Too many failed login attempts. Please try again later or reset your password.');
+                    } else {
+                        showAlert('error', error.message);
+                    }
+                    
+                    resetLoginButton();
+                });
+        });
+        
+        // Forgot password link
+        document.getElementById('forgotPasswordLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            
+            if (!email) {
+                showAlert('info', 'Please enter your email address in the field above.');
+                return;
+            }
+            
+            auth.sendPasswordResetEmail(email)
+                .then(() => {
+                    showAlert('success', 'Password reset email sent. Please check your inbox.');
+                })
+                .catch((error) => {
+                    console.error("Password reset error:", error);
+                    showAlert('error', error.message);
+                });
+        });
+        
+        // Check if user is already logged in
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // Check if user is an admin
+                db.collection('admins').doc(user.uid).get()
+                    .then((doc) => {
+                        if (doc.exists) {
+                            // User is an admin, redirect to dashboard
+                            window.location.href = 'admin.html';
+                        } else {
+                            // User is not an admin, sign out
+                            auth.signOut();
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("Admin check error:", error);
+                        auth.signOut();
+                    });
+            }
+        });
+        
+        // Helper function to display alerts
+        function showAlert(type, message) {
+            const alert = document.getElementById('loginAlert');
+            const alertMessage = document.getElementById('loginAlertMessage');
+            
+            alertMessage.textContent = message;
+            
+            alert.className = `alert alert-${type}`;
+            alert.classList.remove('hidden');
+        }
+        
+        // Helper function to reset login button
+        function resetLoginButton() {
+            document.querySelector('.btn-login').innerHTML = '<i class="fas fa-sign-in-alt"></i> Log In';
+            document.querySelector('.btn-login').disabled = false;
+        }
+    </script>
+</body>
+</html>
